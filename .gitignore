@@ -1,3 +1,9 @@
+# Main file only used for testing
+main.cpp
+
+# Built&run script
+run
+
 # Prerequisites
 *.d
 
