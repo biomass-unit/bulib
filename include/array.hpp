@@ -1,4 +1,7 @@
+#pragma once
+
 #include "utility.hpp"
+
 
 namespace bu {
     template <class T, Usize n>
