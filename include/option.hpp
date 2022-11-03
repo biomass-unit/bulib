@@ -1,16 +1,14 @@
 #pragma once
 
 #include "utility.hpp"
+#include "exception.hpp"
 
 
 namespace bu {
     inline constexpr struct Nullopt {} nullopt;
 
-    struct BadOptionAccess : Exception {
-        auto message() const noexcept -> char const* override {
-            return "bad optional access";
-        }
-    };
+    using BadOptionAccess = StatelessException<"bad option access">;
+
 
     template <class T>
     class [[nodiscard]] Option {
@@ -153,11 +151,21 @@ namespace bu {
         constexpr Option(InPlace, T& reference) noexcept
             : Option { reference } {}
 
+        [[nodiscard]]
         constexpr auto has_value() const noexcept -> bool {
             return m_ptr != nullptr;
         }
+        [[nodiscard]]
         constexpr operator bool() const noexcept {
             return has_value();
+        }
+
+        [[nodiscard]]
+        constexpr auto value() const -> T& {
+            if (m_ptr)
+                return *m_ptr;
+            else
+                throw BadOptionAccess {};
         }
     };
 }

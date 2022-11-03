@@ -1,6 +1,8 @@
 #pragma once
 
+#include "option.hpp"
 #include "utility.hpp"
+#include "exception.hpp"
 
 
 namespace bu {
@@ -55,6 +57,29 @@ namespace bu {
         [[nodiscard]]
         constexpr auto end() noexcept -> T* {
             return m_array + n;
+        }
+
+        constexpr auto operator[](Usize const index) const -> T const& {
+            if (index < n)
+                return m_array[index];
+            else
+                throw OutOfRange {};
+        }
+        constexpr auto operator[](Usize const index) -> T& {
+            return const_cast<T&>(const_cast<Array const&>(*this)[index]);
+        }
+
+        constexpr auto at(Usize const index) const -> Option<T const&> {
+            if (index < n)
+                return m_array[index];
+            else
+                return nullopt;
+        }
+        constexpr auto at(Usize const index) -> Option<T&> {
+            if (index < n)
+                return m_array[index];
+            else
+                return nullopt;
         }
         
         constexpr auto fill(T element)

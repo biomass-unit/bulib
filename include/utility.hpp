@@ -21,10 +21,6 @@ namespace bu {
 
     inline constexpr struct InPlace {} in_place;
 
-    class Exception {
-    public:
-        virtual auto message() const noexcept -> char const* = 0;
-    };
 
     // Add iterator support
     template <class T> [[nodiscard]]
@@ -40,5 +36,23 @@ namespace bu {
     {
         return static_cast<Usize>(distance(begin, end));
     }
+
+
+    template <Usize n>
+    struct [[nodiscard]] Metastring {
+        char m_buffer[n];
+
+        consteval Metastring(char const(&literal)[n]) noexcept {
+            for (Usize i = 0; i != n; ++i) {
+                m_buffer[i] = literal[i];
+            }
+        }
+        constexpr auto string() const noexcept -> char const* {
+            return m_buffer;
+        }
+    };
+
+    template <Usize n>
+    Metastring(char const(&)[n]) -> Metastring<n>;
 
 }
