@@ -28,7 +28,7 @@ namespace bu {
 
     template <class X>
     concept swappable = requires (X& x) {
-        { x.swap(x) } -> std::same_as<void>;
+        ::bu::swap(x, x);
     };
 
     template <class C>
@@ -50,15 +50,14 @@ namespace bu {
         requires std::is_copy_assignable_v<C>;
         requires std::is_move_assignable_v<C>;
         requires std::is_destructible_v<C>;
-        requires swappable<C>;
 
         requires (std::equality_comparable<typename C::ContainedType>
             ? std::equality_comparable<C> : true);
 
         { c.begin()  } -> std::same_as<typename C::Iterator>;
-        { c.end()    } -> std::same_as<typename C::Iterator>;
+        { c.end()    } -> std::same_as<typename C::Sentinel>;
         { cc.begin() } -> std::same_as<typename C::ConstIterator>;
-        { cc.end()   } -> std::same_as<typename C::ConstIterator>;
+        { cc.end()   } -> std::same_as<typename C::ConstSentinel>;
 
         { cc.size()     } -> std::same_as<Usize>;
         { cc.is_empty() } -> std::convertible_to<bool>;

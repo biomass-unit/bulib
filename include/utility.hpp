@@ -38,6 +38,23 @@ namespace bu {
     }
 
 
+    template <class T>
+    constexpr auto swap(T& a, T& b)
+        noexcept(noexcept(a.swap(b))) -> void
+        requires requires { { a.swap(b) } -> std::same_as<void>; }
+    {
+        a.swap(b);
+    }
+    template <class T>
+    constexpr auto swap(T& a, T& b)
+        noexcept(std::is_nothrow_move_assignable_v<T>) -> void
+        requires (!requires { a.swap(b); })
+    {
+        T c = std::move(a);
+        a = std::move(b);
+        b = std::move(c);
+    }
+
     template <Usize n>
     struct [[nodiscard]] Metastring {
         char m_buffer[n];

@@ -1,7 +1,43 @@
 #pragma once
 
 #include "utility.hpp"
+#include "concepts.hpp"
 #include "exception.hpp"
+
+
+namespace bu::dtl {
+    struct OptionSentinel {};
+
+    template <class T>
+    class [[nodiscard]] OptionIterator {
+        T* m_ptr;
+    public:
+        constexpr OptionIterator(T* const ptr) noexcept
+            : m_ptr { ptr } {}
+        constexpr auto operator++() noexcept -> OptionIterator& {
+            m_ptr = nullptr;
+            return *this;
+        }
+        constexpr auto operator++(int) noexcept -> OptionIterator {
+            auto copy = *this;
+            ++*this;
+            return copy;
+        }
+        constexpr auto operator==(OptionSentinel) const noexcept -> bool {
+            return m_ptr == nullptr;
+        }
+        constexpr auto operator!=(OptionSentinel) const noexcept -> bool {
+            return m_ptr != nullptr;
+        }
+        constexpr auto operator*() const -> T& {
+            if (m_ptr)
+                return *m_ptr;
+            else
+                throw BadIndirection {};
+        }
+    };
+
+}
 
 
 namespace bu {
@@ -17,6 +53,12 @@ namespace bu {
         };
         bool m_has_value;
     public:
+        using ContainedType = T;
+        using Iterator      = dtl::OptionIterator<T>;
+        using Sentinel      = dtl::OptionSentinel;
+        using ConstIterator = dtl::OptionIterator<T const>;
+        using ConstSentinel = dtl::OptionSentinel;
+
         constexpr Option(Nullopt = nullopt) noexcept
             : m_has_value { false } {}
 
@@ -36,18 +78,16 @@ namespace bu {
             : m_value { std::forward<U>(u) }
             , m_has_value { true } {}
 
-        template <class U>
-        constexpr Option(Option<U> const& other)
-            noexcept(std::is_nothrow_constructible_v<T, U const&>)
+        constexpr Option(Option const& other)
+            noexcept(std::is_nothrow_copy_constructible_v<T>)
         {
             m_has_value = other.m_has_value;
             if (m_has_value) {
                 std::construct_at(std::addressof(m_value), other.m_value);
             }
         }
-        template <class U>
-        constexpr Option(Option<U>&& other)
-            noexcept(std::is_nothrow_constructible_v<T, U&&>)
+        constexpr Option(Option&& other)
+            noexcept(std::is_nothrow_constructible_v<T>)
         {
             m_has_value = other.m_has_value;
             if (m_has_value) {
@@ -66,11 +106,9 @@ namespace bu {
             }
         }
 
-        template <class U>
-        constexpr auto operator=(Option<U> const& other)
-            noexcept(std::is_nothrow_constructible_v<T, U const&>
-                && std::is_nothrow_assignable_v<T, U const&>)
-            -> Option&
+        constexpr auto operator=(Option const& other)
+            noexcept(std::is_nothrow_constructible_v<T>
+                && std::is_nothrow_copy_assignable_v<T>) -> Option&
         {
             if (m_has_value) {
                 if (other.m_has_value) { // Both have values
@@ -90,11 +128,9 @@ namespace bu {
             }
             return *this;
         }
-        template <class U>
-        constexpr auto operator=(Option<U>&& other)
-            noexcept(std::is_nothrow_constructible_v<T, U&&>
-                && std::is_nothrow_assignable_v<T, U&&>)
-            -> Option&
+        constexpr auto operator=(Option&& other)
+            noexcept(std::is_nothrow_move_constructible_v<T>
+                && std::is_nothrow_move_assignable_v<T>) -> Option&
         {
             if (m_has_value) {
                 if (other.m_has_value) { // Both have values
@@ -120,6 +156,10 @@ namespace bu {
             return m_has_value;
         }
         [[nodiscard]]
+        constexpr auto is_empty() const noexcept -> bool {
+            return !m_has_value;
+        }
+        [[nodiscard]]
         constexpr operator bool() const noexcept {
             return m_has_value;
         }
@@ -135,12 +175,36 @@ namespace bu {
         constexpr auto value() -> T& {
             return const_cast<T&>(const_cast<Option const*>(this)->value());
         }
+
+        [[nodiscard]]
+        constexpr auto begin() const noexcept -> ConstIterator {
+            return m_has_value ? std::addressof(m_value) : nullptr;
+        }
+        [[nodiscard]]
+        constexpr auto begin() noexcept -> Iterator {
+            return m_has_value ? std::addressof(m_value) : nullptr;
+        }
+        [[nodiscard]]
+        constexpr auto end() const noexcept -> ConstSentinel {
+            return {};
+        }
+        [[nodiscard]]
+        constexpr auto end() noexcept -> Sentinel {
+            return {};
+        }
+
+        [[nodiscard]]
+        constexpr auto size() const noexcept -> Usize {
+            return static_cast<Usize>(m_has_value);
+        }
     };
 
     template <class T>
     class [[nodiscard]] Option<T&> {
         T* m_ptr = nullptr;
     public:
+        using ContainedType = T&;
+
         Option() = default;
 
         constexpr Option(Nullopt) {}
@@ -156,6 +220,10 @@ namespace bu {
             return m_ptr != nullptr;
         }
         [[nodiscard]]
+        constexpr auto is_empty() const noexcept -> bool {
+            return m_ptr == nullptr;
+        }
+        [[nodiscard]]
         constexpr operator bool() const noexcept {
             return has_value();
         }
@@ -166,6 +234,15 @@ namespace bu {
                 return *m_ptr;
             else
                 throw BadOptionAccess {};
+        }
+
+        [[nodiscard]]
+        constexpr auto size() const noexcept -> Usize {
+            return m_ptr ? 1 : 0;
+        }
+
+        constexpr auto swap(Option& other) noexcept -> void {
+            swap(m_ptr, other.m_ptr);
         }
     };
 }

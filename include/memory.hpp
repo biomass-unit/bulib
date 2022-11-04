@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utility.hpp"
+#include "concepts.hpp"
 
 
 namespace bu {
@@ -10,7 +11,7 @@ namespace bu {
     {
         x.~X();
     }
-    template <std::input_iterator It, std::sentinel_for<It> Se>
+    template <iterator It, sentinel_for<It> Se>
     constexpr auto destroy(It begin, Se end)
         noexcept(noexcept(destroy(*begin))) -> void
     {
