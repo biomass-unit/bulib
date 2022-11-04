@@ -38,4 +38,13 @@ namespace bu {
             ::operator delete(ptr, alignment);
         }
     };
+
+    template <class A>
+    struct AllocatorTraits {
+        AllocatorTraits() = delete;
+
+        static constexpr bool propagate_on_copy_assign = false;
+        static constexpr bool propagate_on_move_assign = false;
+        static constexpr bool propagate_on_swap        = false;
+    };
 }
