@@ -12,8 +12,9 @@ namespace bu::dtl {
     class [[nodiscard]] OptionIterator {
         T* m_ptr;
     public:
-        constexpr OptionIterator(T* const ptr) noexcept
+        constexpr explicit OptionIterator(T* const ptr) noexcept
             : m_ptr { ptr } {}
+
         constexpr auto operator++() noexcept -> OptionIterator& {
             m_ptr = nullptr;
             return *this;
@@ -23,17 +24,18 @@ namespace bu::dtl {
             ++*this;
             return copy;
         }
-        constexpr auto operator==(OptionSentinel) const noexcept -> bool {
-            return m_ptr == nullptr;
-        }
-        constexpr auto operator!=(OptionSentinel) const noexcept -> bool {
-            return m_ptr != nullptr;
-        }
         constexpr auto operator*() const -> T& {
             if (m_ptr)
                 return *m_ptr;
             else
                 throw BadIndirection {};
+        }
+
+        constexpr auto operator==(OptionSentinel) const noexcept -> bool {
+            return m_ptr == nullptr;
+        }
+        constexpr auto operator!=(OptionSentinel) const noexcept -> bool {
+            return m_ptr != nullptr;
         }
     };
 
@@ -160,7 +162,7 @@ namespace bu {
             return !m_has_value;
         }
         [[nodiscard]]
-        constexpr operator bool() const noexcept {
+        constexpr explicit operator bool() const noexcept {
             return m_has_value;
         }
 
@@ -197,6 +199,17 @@ namespace bu {
         constexpr auto size() const noexcept -> Usize {
             return static_cast<Usize>(m_has_value);
         }
+
+        template <std::equality_comparable_with<T> T2> [[nodiscard]]
+        constexpr auto operator==(Option<T2> const& other) const
+            noexcept(noexcept(m_value == other.m_value)) -> bool
+        {
+            return m_has_value != other.m_has_value
+                ? false
+                : m_has_value
+                    ? m_value == other.m_value
+                    : true;
+        }
     };
 
     template <class T>
@@ -224,7 +237,7 @@ namespace bu {
             return m_ptr == nullptr;
         }
         [[nodiscard]]
-        constexpr operator bool() const noexcept {
+        constexpr explicit operator bool() const noexcept {
             return has_value();
         }
 
@@ -243,6 +256,10 @@ namespace bu {
 
         constexpr auto swap(Option& other) noexcept -> void {
             swap(m_ptr, other.m_ptr);
+        }
+
+        constexpr auto operator==(Option const other) const noexcept -> bool {
+            return m_ptr == other.m_ptr;
         }
     };
 }
