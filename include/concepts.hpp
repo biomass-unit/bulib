@@ -1,5 +1,7 @@
 #pragma once
 
+#include "utility.hpp"
+
 
 namespace bu {
     template <class X>

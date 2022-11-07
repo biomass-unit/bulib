@@ -25,8 +25,8 @@ namespace bu {
         Vector() = default;
 
         constexpr Vector(Usize const count)
-            noexcept(std::is_nothrow_default_constructible_v<T>
-                && std::is_nothrow_default_constructible_v<A>)
+            noexcept(Typelist<T, A>::template
+                all<std::is_nothrow_default_constructible>)
             : m_len { count }
             , m_cap { count }
         {
@@ -45,7 +45,8 @@ namespace bu {
         constexpr auto operator=(Vector&&) noexcept -> Vector&;
 
         constexpr ~Vector()
-            noexcept(std::is_nothrow_destructible_v<T> && nothrow_dealloc<A>)
+            noexcept(std::is_nothrow_destructible_v<T>
+                && nothrow_dealloc<A>)
         {
             destroy(m_ptr, m_ptr + m_len);
             deallocate(m_ptr, m_cap);

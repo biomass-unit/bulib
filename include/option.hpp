@@ -6,7 +6,7 @@
 
 
 namespace bu::dtl {
-    struct OptionSentinel {};
+    struct [[nodiscard]] OptionSentinel {};
 
     template <class T>
     class [[nodiscard]] OptionIterator {

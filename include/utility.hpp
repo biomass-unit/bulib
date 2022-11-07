@@ -72,4 +72,22 @@ namespace bu {
     template <Usize n>
     Metastring(char const(&)[n]) -> Metastring<n>;
 
+
+    template <class... Ts>
+    struct Typelist {
+        static constexpr Usize size = sizeof...(Ts);
+
+        template <template <class...> class Trait>
+        static constexpr bool all =
+            std::conjunction_v<Trait<Ts>...>;
+
+        template <template <class...> class Trait>
+        static constexpr bool any =
+            std::disjunction_v<Trait<Ts>...>;
+
+        template <template <class...> class Trait>
+        static constexpr bool none =
+            std::conjunction_v<std::negate<Trait<Ts>>...>;
+    };
+
 }

@@ -18,8 +18,8 @@ namespace bu {
         using ConstSentinel = ConstIterator;
     
         [[nodiscard]]
-        constexpr auto is_empty() const noexcept -> bool {
-            return false;
+        constexpr auto is_empty() const noexcept -> std::false_type {
+            return {};
         }
         [[nodiscard]]
         constexpr auto size() const noexcept -> Usize {
@@ -132,8 +132,8 @@ namespace bu {
         using ConstSentinel = ConstIterator;
 
         [[nodiscard]]
-        constexpr auto is_empty() const noexcept -> bool {
-            return true;
+        constexpr auto is_empty() const noexcept -> std::true_type {
+            return {};
         }
         [[nodiscard]]
         constexpr auto size() const noexcept -> Usize {
