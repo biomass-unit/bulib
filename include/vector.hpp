@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utility.hpp"
+#include "option.hpp"
 #include "exception.hpp"
 #include "allocator.hpp"
 #include "memory.hpp"
@@ -17,6 +18,7 @@ namespace bu {
     public:
         using ContainedType = T;
         using AllocatorType = A;
+        using SizeType      = Usize;
         using Iterator      = T*;
         using Sentinel      = Iterator;
         using ConstIterator = T const*;
@@ -38,10 +40,53 @@ namespace bu {
             }
         }
 
-        constexpr Vector(Vector const&);
-        constexpr Vector(Vector&&) noexcept;
+        constexpr Vector(Vector const& other)
+            noexcept(std::is_nothrow_copy_constructible_v<T>
+                && nothrow_alloc<A>)
+            : m_allocator { other.m_allocator }
+            , m_len { other.m_len }
+            , m_cap { other.m_cap }
+        {
+            if (m_len) {
+                m_ptr = allocate(m_len);
+                for (Usize i = 0; i != m_len; ++i) {
+                    std::construct_at(m_ptr + i, other.m_ptr[i]);
+                }
+            }
+        }
 
-        constexpr auto operator=(Vector const&) -> Vector&;
+        constexpr Vector(Vector&& other) noexcept
+            : m_allocator { std::move(other.m_allocator) }
+            , m_ptr { BU exchange(other.m_ptr, nullptr) }
+            , m_len { BU exchange(other.m_len, 0) }
+            , m_cap { BU exchange(other.m_cap, 0) } {}
+
+        constexpr auto operator=(Vector const& other)
+            noexcept(nothrow_copyable<T>
+                && std::is_nothrow_copy_assignable_v<A>) -> Vector&
+        {
+            // TODO: Allocator equality
+            if (m_len == other.m_len) {
+                for (Usize i = 0; i != m_len; ++i) {
+                    m_ptr[i] = other.m_ptr[i];
+                }
+            }
+            else if (m_len >= other.m_len) {
+                Usize i = 0;
+                for (; i != m_len; ++i) {
+                    m_ptr[i] = other.m_ptr[i];
+                }
+                for (; i != other.m_len; ++i) {
+                    m_ptr[i].~T();
+                }
+                m_len = other.m_len;
+            }
+            else {
+                std::terminate();
+            }
+            return *this;
+        }
+
         constexpr auto operator=(Vector&&) noexcept -> Vector&;
 
         constexpr ~Vector()
@@ -115,11 +160,11 @@ namespace bu {
 
         constexpr auto swap(Vector& other) noexcept -> void {
             if constexpr (AllocatorTraits<A>::propagate_on_swap) {
-                std::swap(m_allocator, other.m_allocator);
+                swap(m_allocator, other.m_allocator);
             }
-            std::swap(m_ptr, other.m_ptr);
-            std::swap(m_len, other.m_len);
-            std::swap(m_cap, other.m_cap);
+            swap(m_ptr, other.m_ptr);
+            swap(m_len, other.m_len);
+            swap(m_cap, other.m_cap);
         }
     private:
         [[nodiscard]]

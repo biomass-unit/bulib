@@ -48,7 +48,7 @@ namespace bu {
     using BadOptionAccess = StatelessException<"bad option access">;
 
 
-    template <class T>
+    template <class T, std::integral ContainerSizeType = Usize>
     class [[nodiscard]] Option {
         union {
             T m_value;
@@ -56,6 +56,7 @@ namespace bu {
         bool m_has_value;
     public:
         using ContainedType = T;
+        using SizeType      = ContainerSizeType;
         using Iterator      = dtl::OptionIterator<T>;
         using Sentinel      = dtl::OptionSentinel;
         using ConstIterator = dtl::OptionIterator<T const>;
@@ -178,6 +179,21 @@ namespace bu {
             return const_cast<T&>(const_cast<Option const*>(this)->value());
         }
 
+        template <class Arg> [[nodiscard]]
+        constexpr auto value_or(Arg&& arg) const& -> T {
+            if (m_has_value)
+                return m_value;
+            else
+                return static_cast<T>(std::forward<Arg>(arg));
+        }
+        template <class Arg> [[nodiscard]]
+        constexpr auto value_or(Arg&& arg) & -> T {
+            if (m_has_value)
+                return std::move(m_value);
+            else
+                return static_cast<T>(std::forward<Arg>(arg));
+        }
+
         [[nodiscard]]
         constexpr auto begin() const noexcept -> ConstIterator {
             return m_has_value ? std::addressof(m_value) : nullptr;
@@ -190,14 +206,10 @@ namespace bu {
         constexpr auto end() const noexcept -> ConstSentinel {
             return {};
         }
-        [[nodiscard]]
-        constexpr auto end() noexcept -> Sentinel {
-            return {};
-        }
 
         [[nodiscard]]
-        constexpr auto size() const noexcept -> Usize {
-            return static_cast<Usize>(m_has_value);
+        constexpr auto size() const noexcept -> SizeType {
+            return static_cast<SizeType>(m_has_value);
         }
 
         template <std::equality_comparable_with<T> T2> [[nodiscard]]
@@ -212,11 +224,12 @@ namespace bu {
         }
     };
 
-    template <class T>
-    class [[nodiscard]] Option<T&> {
+    template <class T, class ContainerSizeType>
+    class [[nodiscard]] Option<T&, ContainerSizeType> {
         T* m_ptr = nullptr;
     public:
         using ContainedType = T&;
+        using SizeType      = ContainerSizeType;
 
         Option() = default;
 
@@ -250,7 +263,7 @@ namespace bu {
         }
 
         [[nodiscard]]
-        constexpr auto size() const noexcept -> Usize {
+        constexpr auto size() const noexcept -> SizeType {
             return m_ptr ? 1 : 0;
         }
 

@@ -30,12 +30,13 @@ namespace bu {
 
     template <class X>
     concept swappable = requires (X& x) {
-        ::bu::swap(x, x);
+        BU swap(x, x);
     };
 
     template <class C>
     concept container = requires (C c, C const cc) {
         typename C::ContainedType;
+        typename C::SizeType;
         typename C::Iterator;
         typename C::Sentinel;
         typename C::ConstIterator;
@@ -61,7 +62,7 @@ namespace bu {
         { cc.begin() } -> std::same_as<typename C::ConstIterator>;
         { cc.end()   } -> std::same_as<typename C::ConstSentinel>;
 
-        { cc.size()     } -> std::same_as<Usize>;
-        { cc.is_empty() } -> std::convertible_to<bool>;
+        { cc.size()     } -> std::same_as<typename C::SizeType>;
+        { cc.is_empty() } -> std::same_as<bool>;
     };
 }

@@ -82,6 +82,7 @@ namespace bu {
     public:
         using ContainedType = T;
         using AllocatorType = A;
+        using SizeType      = Usize;
         using Iterator      = dtl::ListIterator<T, false>;
         using Sentinel      = dtl::ListSentinel;
         using ConstIterator = dtl::ListIterator<T, true>;

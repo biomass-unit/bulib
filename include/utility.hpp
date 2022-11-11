@@ -7,8 +7,11 @@
 #include <type_traits>
 #include <concepts>
 #include <utility>
+#include <compare>
 #include <limits>
 #include <memory>
+
+#define BU ::bu::
 
 
 namespace bu {
@@ -16,10 +19,17 @@ namespace bu {
     using Usize = std::size_t;
     using Isize = std::make_signed_t<Usize>;
 
-    template <class T> constexpr auto maximum = std::numeric_limits<T>::max();
-    template <class T> constexpr auto minimum = std::numeric_limits<T>::min();
+    template <class T> constexpr T maximum = std::numeric_limits<T>::max();
+    template <class T> constexpr T minimum = std::numeric_limits<T>::min();
 
     inline constexpr struct InPlace {} in_place;
+
+    template <class T>
+    concept nothrow_movable = std::is_nothrow_move_constructible_v<T>
+        && std::is_nothrow_move_assignable_v<T>;
+    template <class T>
+    concept nothrow_copyable = std::is_nothrow_copy_constructible_v<T>
+        && std::is_nothrow_copy_assignable_v<T>;
 
 
     // Add iterator support
@@ -53,6 +63,15 @@ namespace bu {
         T c = std::move(a);
         a = std::move(b);
         b = std::move(c);
+    }
+
+    template <class T>
+    constexpr auto exchange(T& reference, std::type_identity_t<T>&& new_value)
+        noexcept(nothrow_movable<T>) -> T
+    {
+        T old_value = std::move(reference);
+        reference = std::move(new_value);
+        return old_value;
     }
 
     template <Usize n>

@@ -7,23 +7,24 @@
 
 
 namespace bu {
-    template <class T, Usize n>
+    template <class T, Usize extent>
     struct [[nodiscard]] Array {
-        T m_array[n];
+        T m_array[extent];
 
         using ContainedType = T;
+        using SizeType      = Usize;
         using Iterator      = T*;
         using Sentinel      = Iterator;
         using ConstIterator = T const*;
         using ConstSentinel = ConstIterator;
     
         [[nodiscard]]
-        constexpr auto is_empty() const noexcept -> std::false_type {
-            return {};
+        constexpr auto is_empty() const noexcept -> bool {
+            return false;
         }
         [[nodiscard]]
-        constexpr auto size() const noexcept -> Usize {
-            return n;
+        constexpr auto size() const noexcept -> SizeType {
+            return extent;
         }
         [[nodiscard]]
         constexpr auto data() const noexcept -> T const* {
@@ -43,11 +44,11 @@ namespace bu {
         }
         [[nodiscard]]
         constexpr auto back() const noexcept -> T const& {
-            return m_array[n - 1];
+            return m_array[extent - 1];
         }
         [[nodiscard]]
         constexpr auto back() noexcept -> T& {
-            return m_array[n - 1];
+            return m_array[extent - 1];
         }
         [[nodiscard]]
         constexpr auto begin() const noexcept -> T const* {
@@ -59,45 +60,45 @@ namespace bu {
         }
         [[nodiscard]]
         constexpr auto end() const noexcept -> T const* {
-            return m_array + n;
+            return m_array + extent;
         }
         [[nodiscard]]
         constexpr auto end() noexcept -> T* {
-            return m_array + n;
+            return m_array + extent;
         }
 
         [[nodiscard]]
-        constexpr auto operator[](Usize const index) const -> T const& {
-            if (index < n)
+        constexpr auto operator[](SizeType const index) const -> T const& {
+            if (index < extent)
                 return m_array[index];
             else
                 throw OutOfRange {};
         }
         [[nodiscard]]
-        constexpr auto operator[](Usize const index) -> T& {
+        constexpr auto operator[](SizeType const index) -> T& {
             return const_cast<T&>(const_cast<Array const&>(*this)[index]);
         }
 
         [[nodiscard]]
-        constexpr auto at(Usize const index) const -> Option<T const&> {
-            if (index < n)
+        constexpr auto at(SizeType const index) const -> Option<T const&> {
+            if (index < extent)
                 return m_array[index];
             else
                 return nullopt;
         }
         [[nodiscard]]
-        constexpr auto at(Usize const index) -> Option<T&> {
-            if (index < n)
+        constexpr auto at(SizeType const index) -> Option<T&> {
+            if (index < extent)
                 return m_array[index];
             else
                 return nullopt;
         }
 
         template <std::equality_comparable_with<T> T2> [[nodiscard]]
-        constexpr auto operator==(Array<T2, n> const& other) const
+        constexpr auto operator==(Array<T2, extent> const& other) const
             noexcept(noexcept(std::declval<T>() != std::declval<T2>())) -> bool
         {
-            for (Usize i = 0; i != n; ++i) {
+            for (SizeType i = 0; i != extent; ++i) {
                 if (m_array[i] != other.m_array[i])
                     return false;
             }
@@ -105,18 +106,18 @@ namespace bu {
         }
 
         constexpr auto swap(Array& other)
-            noexcept(noexcept(m_array[0].swap(m_array[0]))) -> void
+            noexcept(noexcept(BU swap(m_array[0], m_array[0]))) -> void
             requires swappable<T>
         {
-            for (Usize i = 0; i != n; ++i) {
-                m_array[i].swap(other.m_array[i]);
+            for (SizeType i = 0; i != extent; ++i) {
+                BU swap(m_array[i], other.m_array[i]);
             }
         }
         
         constexpr auto fill(T element)
             noexcept(std::is_nothrow_copy_constructible_v<T>) -> void
         {
-            for (Usize i = 0; i != n-1; ++i) {
+            for (SizeType i = 0; i != extent-1; ++i) {
                 m_array[i] = element;
             }
             back() = std::move(element);
@@ -126,17 +127,18 @@ namespace bu {
     template <class T>
     struct [[nodiscard]] Array<T, 0> {
         using ContainedType = T;
+        using SizeType      = Usize;
         using Iterator      = T*;
         using Sentinel      = Iterator;
         using ConstIterator = T const*;
         using ConstSentinel = ConstIterator;
 
         [[nodiscard]]
-        constexpr auto is_empty() const noexcept -> std::true_type {
-            return {};
+        constexpr auto is_empty() const noexcept -> bool {
+            return true;
         }
         [[nodiscard]]
-        constexpr auto size() const noexcept -> Usize {
+        constexpr auto size() const noexcept -> SizeType {
             return 0;
         }
         [[nodiscard]]
@@ -156,12 +158,12 @@ namespace bu {
             return nullptr;
         }
         [[nodiscard]]
-        constexpr auto operator==(Array) const noexcept -> std::true_type {
-            return {};
+        constexpr auto operator==(Array) const noexcept -> bool {
+            return true;
         }
         [[nodiscard]]
-        constexpr auto operator!=(Array) const noexcept -> std::false_type {
-            return {};
+        constexpr auto operator!=(Array) const noexcept -> bool {
+            return false;
         }
         constexpr auto swap(Array&) noexcept -> void {
             // no-op

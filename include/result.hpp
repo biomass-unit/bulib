@@ -49,7 +49,7 @@ namespace bu {
     Err() -> Err<dtl::ResultDefaultConstructTag>;
 
 
-    template <class Good, class Bad>
+    template <class Good, class Bad, std::integral ContainerSizeType = Usize>
     class [[nodiscard]] Result {
         union {
             Good m_good;
@@ -61,6 +61,7 @@ namespace bu {
     public:
         using ContainedType = Good;
         using ErrorType     = Bad;
+        using SizeType      = ContainerSizeType;
         using Iterator      = dtl::OptionIterator<Good>;
         using Sentinel      = dtl::OptionSentinel;
         using ConstIterator = dtl::OptionIterator<Good const>;
@@ -299,8 +300,8 @@ namespace bu {
         }
 
         [[nodiscard]]
-        constexpr auto size() const noexcept -> Usize {
-            return static_cast<Usize>(m_is_good);
+        constexpr auto size() const noexcept -> SizeType {
+            return static_cast<SizeType>(m_is_good);
         }
         [[nodiscard]]
         constexpr auto is_empty() const noexcept -> bool {
