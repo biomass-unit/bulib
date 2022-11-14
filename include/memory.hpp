@@ -97,6 +97,10 @@ namespace bu {
             if (m_pointer)
                 m_deleter(BU exchange(m_pointer, nullptr));
         }
+        [[nodiscard]]
+        constexpr auto release() noexcept -> Pointer {
+            return BU exchange(m_pointer, nullptr);
+        }
 
         [[nodiscard]]
         constexpr auto operator*() const noexcept -> T& {
@@ -107,11 +111,6 @@ namespace bu {
         constexpr auto operator->() const noexcept -> T* {
             assert(m_pointer);
             return m_pointer;
-        }
-
-        [[nodiscard]]
-        constexpr auto release() noexcept -> Pointer {
-            return BU exchange(m_pointer, nullptr);
         }
         [[nodiscard]]
         constexpr explicit operator bool() const noexcept {

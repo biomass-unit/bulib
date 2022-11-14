@@ -3,9 +3,12 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <cstdio>
 
 #include <type_traits>
 #include <concepts>
+#include <typeinfo>
 #include <utility>
 #include <compare>
 #include <limits>
@@ -22,7 +25,19 @@ namespace bu {
     template <class T> constexpr T maximum = std::numeric_limits<T>::max();
     template <class T> constexpr T minimum = std::numeric_limits<T>::min();
 
-    inline constexpr struct InPlace {} in_place;
+
+    struct InPlace {};
+    constexpr InPlace in_place;
+
+    template <class>
+    struct InPlaceType {};
+    template <class T>
+    constexpr InPlaceType<T> in_place_type;
+
+
+    template <class>
+    constexpr bool always_false = false;
+
 
     template <class T>
     concept nothrow_movable = std::is_nothrow_move_constructible_v<T>
@@ -30,6 +45,13 @@ namespace bu {
     template <class T>
     concept nothrow_copyable = std::is_nothrow_copy_constructible_v<T>
         && std::is_nothrow_copy_assignable_v<T>;
+
+
+    [[noreturn]]
+    inline auto unreachable() {
+        std::puts("Unreachable branch reached");
+        std::terminate();
+    }
 
 
     // Add iterator support
