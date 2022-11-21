@@ -19,20 +19,17 @@ namespace bu::dtl {
     struct EmptyAnyVtable {};
 
     struct MoveAnyVtable {
-        void (*constructor)(void* from, void* to) noexcept = nullptr;
-        void (*assignment) (void* from, void* to) noexcept = nullptr;
     };
     struct CopyAnyVtable {
-        void (*constructor)(void const* from, void* to) = nullptr;
-        void (*assignment) (void const* from, void* to) = nullptr;
     };
     template <bool is_movable, bool is_copyable>
     struct AnyVtable {
-        [[no_unique_address]]
-        std::conditional_t<is_movable,  MoveAnyVtable, EmptyAnyVtable> move;
-        [[no_unique_address]]
-        std::conditional_t<is_copyable, CopyAnyVtable, EmptyAnyVtable> copy;
-        void (*destructor)(void*) noexcept = nullptr;
+        void (*destructor)      (void      *)                noexcept = nullptr;
+        void (*move_constructor)(void      * from, void* to) noexcept = nullptr;
+        void (*move_assignment) (void      * from, void* to) noexcept = nullptr;
+        void (*copy_constructor)(void const* from, void* to)          = nullptr;
+        void (*copy_assignment) (void const* from, void* to)          = nullptr;
+
         std::type_info const* rtti;
         Usize                 type_size;
         bool                  type_is_small;
@@ -66,29 +63,25 @@ namespace bu::dtl {
                     : AnyState::nontrivial_big
         };
         if constexpr (is_movable) {
-            table.move = MoveAnyVtable {
-                .constructor = [](void* from, void* to) noexcept {
-                    std::construct_at(
-                        static_cast<T*>(to),
-                        std::move(*static_cast<T*>(from))
-                    );
-                },
-                .assignment = [](void* from, void* to) noexcept {
-                    *static_cast<T*>(to) = std::move(*static_cast<T*>(from));
-                }
+            table.move_constructor = [](void* from, void* to) noexcept {
+                std::construct_at(
+                    static_cast<T*>(to),
+                    std::move(*static_cast<T*>(from))
+                );
+            };
+            table.move_assignment = [](void* from, void* to) noexcept {
+                *static_cast<T*>(to) = std::move(*static_cast<T*>(from));
             };
         }
         if constexpr (is_copyable) {
-            table.copy = CopyAnyVtable {
-                .constructor = [](void const* const from, void* const to) {
-                    std::construct_at(
-                        static_cast<T*>(to),
-                        *static_cast<T const*>(from)
-                    );
-                },
-                .assignment = [](void const* const from, void* const to) {
-                    *static_cast<T*>(to) = *static_cast<T const*>(from);
-                }
+            table.copy_constructor = [](void const* const from, void* const to) {
+                std::construct_at(
+                    static_cast<T*>(to),
+                    *static_cast<T const*>(from)
+                );
+            };
+            table.copy_assignment = [](void const* const from, void* const to) {
+                *static_cast<T*>(to) = *static_cast<T const*>(from);
             };
         }
         return table;
@@ -136,12 +129,12 @@ namespace bu::dtl {
             case AnyState::nontrivial_big:
             {
                 m_value.big = allocate_dynamic_storage(m_table->type_size);
-                m_table->copy.constructor(other.m_value.big, m_value.big);
+                m_table->copy_constructor(other.m_value.big, m_value.big);
                 return;
             }
             case AnyState::nontrivial_small:
             {
-                m_table->copy.constructor(other.m_value.small, m_value.small);
+                m_table->copy_constructor(other.m_value.small, m_value.small);
                 return;
             }
             case AnyState::trivial_big:
@@ -180,7 +173,7 @@ namespace bu::dtl {
             }
             case AnyState::nontrivial_small:
             {
-                m_table->move.constructor(other.m_value.small, m_value.small);
+                m_table->move_constructor(other.m_value.small, m_value.small);
                 return;
             }
             default:
@@ -191,14 +184,14 @@ namespace bu::dtl {
         auto operator=(BasicAny const& other)
             -> BasicAny& requires is_copyable
         {
-            do_assignment<&Vtable::copy>(other);
+            do_assignment<&Vtable::copy_assignment>(other);
             return *this;
         }
 
         auto operator=(BasicAny&& other)
             -> BasicAny& requires is_movable
         {
-            do_assignment<&Vtable::move>(other);
+            do_assignment<&Vtable::move_assignment>(other);
             return *this;
         }
 
@@ -269,7 +262,7 @@ namespace bu::dtl {
             ::operator delete(storage);
         }
 
-        template <auto Vtable::* operation>
+        template <auto Vtable::* assignment_operator>
         auto do_assignment(auto& other) -> void {
             if (this == &other)
                 return;
@@ -278,12 +271,12 @@ namespace bu::dtl {
                 switch (m_table->state) {
                 case AnyState::nontrivial_big:
                 {
-                    (m_table->*operation).assignment(other.m_value.big, m_value.big);
+                    (m_table->*assignment_operator)(other.m_value.big, m_value.big);
                     return;
                 }
                 case AnyState::nontrivial_small:
                 {
-                    (m_table->*operation).assignment(other.m_value.small, m_value.small);
+                    (m_table->*assignment_operator)(other.m_value.small, m_value.small);
                     return;
                 }
                 case AnyState::trivial_big:
@@ -308,13 +301,19 @@ namespace bu::dtl {
 
             else { // Reconstruct from other
                 if constexpr (is_movable &&
-                    std::same_as<decltype(operation), decltype(&Vtable::move)>)
+                    std::same_as<
+                        decltype(assignment_operator),
+                        decltype(&Vtable::move_assignment)
+                    >)
                 {
                     this->~BasicAny();
                     std::construct_at(this, std::move(other));
                 }
                 else if constexpr (is_copyable &&
-                    std::same_as<decltype(operation), decltype(&Vtable::copy)>)
+                    std::same_as<
+                        decltype(assignment_operator),
+                        decltype(&Vtable::copy_assignment)
+                    >)
                 {
                     BasicAny backup = std::move(*this);
                     this->~BasicAny();
@@ -329,7 +328,7 @@ namespace bu::dtl {
                     }
                 }
                 else {
-                    static_assert(BU always_false<decltype(operation)>);
+                    static_assert(BU always_false<decltype(assignment_operator)>);
                 }
             }
         }
