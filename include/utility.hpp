@@ -7,6 +7,7 @@
 #include <cstdio>
 
 #include <type_traits>
+#include <functional>
 #include <concepts>
 #include <typeinfo>
 #include <utility>
@@ -49,24 +50,30 @@ namespace bu {
 
     [[noreturn]]
     inline auto unreachable() {
-        std::puts("Unreachable branch reached");
+        std::puts("A branch marked as unreachable was reached");
         std::terminate();
     }
 
 
-    // Add iterator support
-    template <class T> [[nodiscard]]
-    constexpr auto distance(T* const begin, T* const end)
+    template <std::input_iterator It, std::sentinel_for<It> Se> [[nodiscard]]
+    constexpr auto distance(It begin, Se const end)
         noexcept -> std::ptrdiff_t
     {
-        return (end - begin);
+        if constexpr (std::random_access_iterator<It>) {
+            return end - begin;
+        }
+        else {
+            std::ptrdiff_t dist = 0;
+            for (; begin != end; ++begin, ++dist);
+            return dist;
+        }
     }
 
     template <std::input_iterator It, std::sentinel_for<It> S>
     constexpr auto unsigned_distance(It const begin,S const end)
         noexcept -> Usize
     {
-        return static_cast<Usize>(distance(begin, end));
+        return static_cast<Usize>(BU distance(begin, end));
     }
 
 

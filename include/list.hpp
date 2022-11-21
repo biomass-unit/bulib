@@ -9,20 +9,20 @@
 namespace bu {
     template <class T>
     struct [[nodiscard]] ListNode {
+        [[no_unique_address]]
         T         value;
         ListNode* next = nullptr;
         ListNode* prev = nullptr;
 
-        constexpr ListNode(T&& value)
-            noexcept(std::is_nothrow_move_constructible_v<T>)
-            : value { std::move(value) } {}
+        template <class... Args>
+        constexpr ListNode(Args&&... args)
+            noexcept(std::is_nothrow_constructible_v<T, Args&&...>)
+            : value(std::forward<Args>(args)...) {}
     };
 
     namespace dtl {
-        struct [[nodiscard]] ListSentinel {};
-
         template <class T, bool is_const>
-        class [[nodiscard]] ListIterator {
+        class ListIterator {
             ListNode<T>* m_node;
         public:
             constexpr explicit ListIterator(ListNode<T>* const node) noexcept
@@ -40,6 +40,7 @@ namespace bu {
                 ++*this;
                 return copy;
             }
+            [[nodiscard]]
             constexpr auto operator--() -> ListIterator& {
                 if (m_node) {
                     m_node = m_node->prev;
@@ -47,11 +48,13 @@ namespace bu {
                 }
                 else throw BadIndirection {};
             }
+            [[nodiscard]]
             constexpr auto operator--(int) -> ListIterator {
                 auto copy = *this;
                 --*this;
                 return copy;
             }
+            [[nodiscard]]
             constexpr auto operator*() const
                 -> std::conditional_t<is_const, T const, T>&
             {
@@ -61,11 +64,28 @@ namespace bu {
                     throw BadIndirection {};
             }
 
-            constexpr auto operator==(ListSentinel) const noexcept -> bool {
+            [[nodiscard]]
+            constexpr auto operator==(ListIterator const&) const
+                noexcept -> bool = default;
+
+            [[nodiscard]]
+            constexpr auto is_end_iterator() const
+                noexcept -> bool
+            {
                 return m_node == nullptr;
             }
-            constexpr auto operator!=(ListSentinel) const noexcept -> bool {
-                return m_node != nullptr;
+
+            // Enable conversion of non-const to const iterators
+            [[nodiscard]]
+            constexpr operator ListIterator<T, true>() const
+                noexcept requires (!is_const)
+            {
+                return ListIterator<T, true> { m_node };
+            }
+
+            [[nodiscard]]
+            constexpr auto get_node() const noexcept -> ListNode<T>* {
+                return m_node;
             }
         }; // struct ListIterator
     } // namespace dtl
@@ -84,73 +104,271 @@ namespace bu {
         using AllocatorType = A;
         using SizeType      = Usize;
         using Iterator      = dtl::ListIterator<T, false>;
-        using Sentinel      = dtl::ListSentinel;
+        using Sentinel      = Iterator;
         using ConstIterator = dtl::ListIterator<T, true>;
-        using ConstSentinel = dtl::ListSentinel;
+        using ConstSentinel = ConstIterator;
 
         List() = default;
+
+        constexpr List(Usize count, T element)
+            noexcept(std::is_nothrow_default_constructible_v<A>
+                && std::is_nothrow_copy_constructible_v<T>
+                && std::is_nothrow_move_constructible_v<T>)
+        {
+            if (!count)
+                return;
+            while (--count) {
+                append(element);
+            }
+            append(std::move(element));
+        }
 
         template <Usize n>
         constexpr List(T(&&initializers)[n], A allocator = A {})
             noexcept(std::is_nothrow_move_constructible_v<T>)
             : m_allocator { std::move(allocator) }
         {
-            for (Usize i = 0; i != n; ++i) {
-                append(std::move(initializers[i]));
+            for (T& initializer : initializers) {
+                append(std::move(initializer));
             }
         }
 
-        constexpr ~List()
+        constexpr List(List const& other)
+            noexcept(Typelist<T, A>::template all<std::is_nothrow_copy_constructible>
+                && nothrow_alloc<A>)
+            : m_allocator { other.m_allocator }
+        {
+            for (T const& element : other) {
+                append(element);
+            }
+        }
+
+        constexpr List(List&& other) noexcept
+            : m_allocator { std::move(other.m_allocator) }
+            , m_head { BU exchange(other.m_head, nullptr) }
+            , m_tail { BU exchange(other.m_tail, nullptr) }
+            , m_len  { BU exchange(other.m_len, 0) } {}
+
+        constexpr auto operator=(List const& other)
+            noexcept(true) -> List&
+        {
+            if (this == &other)
+                return *this;
+
+            if constexpr (bu::AllocatorTraits<A>::propagate_on_copy_assign) {
+                m_allocator = other.m_allocator;
+            }
+
+            Iterator      a =       begin();
+            ConstIterator b = other.begin();
+
+            if (m_len == other.m_len) { // Member-wise assignment
+                while (!a.is_end_iterator()) {
+                    *a++ = *b++;
+                }
+                return *this;
+            }
+            else if (m_len < other.m_len) {
+                while (!a.is_end_iterator()) {
+                    *a++ = *b++;
+                }
+                while (!b.is_end_iterator()) {
+                    append(*b++);
+                }
+                return *this;
+            }
+            else { // m_len > other.m_len
+                while (!b.is_end_iterator()) {
+                    *a++ = *b++;
+                }
+                while (m_len > other.m_len) {
+                    erase(Iterator { m_tail });
+                }
+                return *this;
+            }
+        }
+
+        constexpr auto operator=(List&& other)
+            noexcept -> List&
+        {
+            this->~List();
+            return *std::construct_at(this, std::move(other));
+        }
+
+        constexpr ~List() noexcept(noexcept(clear())) {
+            clear();
+        }
+
+        constexpr auto clear()
             noexcept(std::is_nothrow_destructible_v<T>
-                && nothrow_dealloc<T>)
+                && nothrow_dealloc<T>) -> void
         {
             Node* node = m_head;
             while (node) {
-                node->~Node();
-                Node* const old_node = node;
-                node = node->next;
-                deallocate_node(old_node);
+                Node* const next_node = node->next;
+                delete_node(node);
+                node = next_node;
             }
+            m_head = nullptr;
+            m_tail = nullptr;
+            m_len  = 0;
+        }
+
+        /* Description:
+         *     Creates a new node with a value constructed by
+         *     `T(std::forward<Args>(args)...)` and inserts it
+         *     before `where`. If `where` is the end iterator,
+         *     equivalent to append. If `where` is the begin
+         *     iterator, equivalent to prepend.
+         *
+         * Return value:
+         *     Iterator to the newly inserted node.
+         *
+         * Exceptions:
+         *     Invokes potentially throwing operations:
+         *     - T::T(Args&&...)
+         *     - A::allocate(bu::Usize)
+         *
+         * Preconditions:
+         *     `where` must be an iterator into `this`.
+         */
+        template <class... Args>
+        constexpr auto insert(ConstIterator const where, Args&&... args)
+            noexcept(std::is_nothrow_constructible_v<T, Args&&...>
+                && nothrow_alloc<A>) -> Iterator
+        {
+            Node* const new_node  = make_node(std::forward<Args>(args)...);
+            Node* const successor = where.get_node();
+
+            if (successor) {
+                if (successor == m_head) { // Prepend
+                    if (m_head) {
+                        new_node->next = m_head;
+                        m_head->prev = new_node;
+                        m_head = new_node;
+                    }
+                    else {
+                        m_head = m_tail = new_node;
+                    }
+                }
+                else { // Middle
+                    assert(m_len >= 2);
+
+                    new_node->prev = successor->prev;
+                    new_node->next = successor;
+
+                    successor->prev->next = new_node;
+                    successor->prev = new_node;
+                }
+            }
+            else { // Append
+                if (m_tail) {
+                    new_node->prev = m_tail;
+                    m_tail->next = new_node;
+                    m_tail = new_node;
+                }
+                else {
+                    m_head = m_tail = new_node;
+                }
+            }
+
+            ++m_len;
+            return Iterator { new_node };
         }
 
         template <class... Args>
         constexpr auto append(Args&&... args)
             noexcept(std::is_nothrow_constructible_v<T, Args&&...>
-                 && nothrow_alloc<A>) -> void
+                && nothrow_alloc<A>) -> void
         {
-            Node* const new_tail = allocate_node();
-            std::construct_at(new_tail, T { std::forward<Args>(args)... });
-
-            if (m_tail) {
-                new_tail->prev = m_tail;
-                m_tail->next = new_tail;
-                m_tail = new_tail;
-            }
-            else {
-                m_head = m_tail = new_tail;
-            }
-
-            ++m_len;
+            (void)insert(end(), std::forward<Args>(args)...);
         }
 
         template <class... Args>
         constexpr auto prepend(Args&&... args)
             noexcept(std::is_nothrow_constructible_v<T, Args&&...>
-                 && nothrow_alloc<A>) -> void
+                && nothrow_alloc<A>) -> void
         {
-            Node* const new_head = allocate_node();
-            std::construct_at(new_head, T { std::forward<Args>(args)... });
+            (void)insert(begin(), std::forward<Args>(args)...);
+        }
 
-            if (m_head) {
-                new_head->next = m_head;
-                m_head->prev = new_head;
-                m_head = new_head;
+        /* Description:
+         *     Erases the node at `where`.
+         *
+         * Return value:
+         *     Iterator to the node that comes after `where`, or
+         *     the end iterator if there is no node after `where`.
+         *
+         * Exceptions:
+         *     Invokes potentially throwing operations:
+         *     - A::deallocate(T*, bu::Usize)
+         *     - T::~T()
+         *
+         * Preconditions:
+         *     `where` must be an iterator into `this`.
+         */
+        constexpr auto erase(ConstIterator const where)
+            noexcept(std::is_nothrow_destructible_v<T>
+                && nothrow_dealloc<A>) -> Iterator
+        {
+            Node* const node = where.get_node();
+            if (!node) {
+                return Iterator { nullptr };
+            }
+
+            Node* const prev = node->prev;
+            Node* const next = node->next;
+
+            delete_node(node);
+
+            if (prev) {
+                prev->next = next;
             }
             else {
-                m_head = m_tail = new_head;
+                m_head = next;
             }
 
-            ++m_len;
+            if (next) {
+                next->prev = prev;
+            }
+            else {
+                m_tail = prev;
+            }
+
+            --m_len;
+            return Iterator { next };
+        }
+
+        template <std::predicate<T const&, T const&> BinaryPredicate>
+        constexpr auto unique(BinaryPredicate predicate)
+            noexcept(std::is_nothrow_invocable_v<BinaryPredicate, T const&, T const&>
+                && nothrow_dealloc<A>) -> Usize
+        {
+            // If the list contains fewer than 2 elements no duplicates can exist
+            if (m_len < 2) return 0;
+
+            Usize    erased_count = 0;
+            Iterator previous     = begin();
+
+            for (Iterator it = ++begin(); it != Sentinel {};) {
+                assert(it.get_node() != nullptr);
+                if (std::invoke(predicate, *it, *previous)) {
+                    it = erase(it);
+                    ++erased_count;
+                }
+                else {
+                    previous = it++;
+                }
+            }
+
+            return erased_count;
+        }
+
+        constexpr auto unique()
+            noexcept(noexcept(unique(std::equal_to<T>{}))) -> Usize
+            requires std::equality_comparable<T>
+        {
+            return unique(std::equal_to<T>{});
         }
 
         constexpr auto begin() const noexcept -> ConstIterator {
@@ -160,7 +378,10 @@ namespace bu {
             return Iterator { m_head };
         }
         constexpr auto end() const noexcept -> ConstSentinel {
-            return {};
+            return ConstSentinel { nullptr };
+        }
+        constexpr auto end() noexcept -> Sentinel {
+            return Sentinel { nullptr };
         }
 
         constexpr auto size() const noexcept -> Usize {
@@ -172,7 +393,7 @@ namespace bu {
 
         template <std::equality_comparable_with<T> T2> [[nodiscard]]
         constexpr auto operator==(List<T2> const& other) const
-            noexcept(noexcept(std::declval<T>() == std::declval<T2>())) -> bool
+            noexcept(noexcept(std::declval<T const&>() == std::declval<T2 const&>())) -> bool
         {
             if (m_len != other.m_len)
                 return false;
@@ -187,14 +408,25 @@ namespace bu {
             return true;
         }
     private:
-        constexpr auto allocate_node()
-            noexcept(nothrow_alloc<A>) -> Node*
+        template <class... Args>
+        constexpr auto make_node(Args&&... args)
+            noexcept(std::is_nothrow_constructible_v<T, Args&&...>
+                && nothrow_alloc<A>) -> Node*
         {
-            return m_allocator.allocate(1);
+            Node* const node = m_allocator.allocate(1);
+            try {
+                return std::construct_at(node, std::forward<Args>(args)...);
+            }
+            catch (...) {
+                m_allocator.deallocate(node, 1);
+                throw;
+            }
         }
-        constexpr auto deallocate_node(Node* const node)
-            noexcept(nothrow_dealloc<A>) -> void
+        constexpr auto delete_node(Node* const node)
+            noexcept(std::is_nothrow_destructible_v<T>
+                && nothrow_dealloc<A>) -> void
         {
+            node->~Node();
             m_allocator.deallocate(node, 1);
         }
     }; // cass List
